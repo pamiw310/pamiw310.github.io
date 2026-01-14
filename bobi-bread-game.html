@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>波比：麵包保衛戰</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --panel:#121a33;
+      --text:#eaf0ff;
+      --muted:#aeb7e6;
+      --accent:#7cf7c8;
+      --warn:#ffd166;
+      --danger:#ff6b6b;
+      --shadow: 0 12px 34px rgba(0,0,0,.35);
+      --radius: 18px;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(1200px 700px at 70% 10%, rgba(124,247,200,.16), transparent 55%),
+        radial-gradient(900px 600px at 15% 15%, rgba(120,160,255,.16), transparent 55%),
+        radial-gradient(1200px 800px at 40% 100%, rgba(255,107,107,.10), transparent 60%),
+        var(--bg);
+      overflow:hidden;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+    }
+    .wrap{
+      width:min(1100px, 100%);
+      display:grid;
+      grid-template-columns: 1fr 340px;
+      gap:16px;
+      align-items:start;
+    }
+    @media (max-width: 960px){
+      .wrap{ grid-template-columns: 1fr; }
+    }
+    .card{
+      background: linear-gradient(180deg, rgba(18,26,51,.92), rgba(18,26,51,.70));
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      backdrop-filter: blur(10px);
+    }
+    .stage{ position:relative; aspect-ratio: 16/10; min-height: 340px; }
+    canvas{ width:100%; height:100%; display:block; }
+
+    .hud{
+      position:absolute; inset:0;
+      pointer-events:none;
+      padding:14px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .hud-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: 0 8px 18px rgba(0,0,0,.24);
+      font-size: 13px;
+      color: var(--text);
+      white-space:nowrap;
+    }
+    .pill strong{ font-variant-numeric: tabular-nums; }
+    .tag{
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .tag.warn{ border-color: rgba(255,209,102,.30); background: rgba(255,209,102,.10); color: #ffe7b0; }
+    .tag.danger{ border-color: rgba(255,107,107,.30); background: rgba(255,107,107,.10); color: #ffd0d0; }
+    .hint{
+      color: rgba(174,183,230,.92);
+      font-size: 13px;
+      line-height:1.5;
+    }
+    .kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      padding: 2px 6px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      border-radius: 8px;
+      color: var(--text);
+      white-space:nowrap;
+    }
+
+    .panel{ padding:16px; }
+    h1{ margin:0 0 6px; font-size:18px; letter-spacing:.4px; }
+    .sub{ margin:0 0 12px; color: var(--muted); font-size:13px; line-height:1.55; }
+
+    .controls{ display:grid; gap:10px; margin-top:12px; }
+    .bigbtn{
+      pointer-events:auto;
+      width:100%;
+      border:none;
+      border-radius: 18px;
+      padding: 14px 14px;
+      font: inherit;
+      font-weight: 800;
+      color: var(--text);
+      background: linear-gradient(180deg, rgba(124,247,200,.18), rgba(124,247,200,.10));
+      border: 1px solid rgba(124,247,200,.28);
+      box-shadow: 0 12px 26px rgba(0,0,0,.26);
+      cursor:pointer;
+      transition: transform .06s ease, filter .2s ease;
+      touch-action: manipulation;
+      user-select:none;
+    }
+    .bigbtn:active{ transform: translateY(1px); }
+    .bigbtn.secondary{
+      background: rgba(255,255,255,.06);
+      border-color: rgba(255,255,255,.14);
+      font-weight: 600;
+    }
+    .row{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 0;
+      border-top: 1px dashed rgba(255,255,255,.10);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .row:first-of-type{ border-top:none; padding-top:0; }
+    .row b{ color: var(--text); }
+    .mini{ margin-top:12px; font-size: 12px; color: rgba(174,183,230,.85); line-height:1.55; }
+
+    .overlay{
+      position:absolute; inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: rgba(0,0,0,.45);
+      backdrop-filter: blur(6px);
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .18s ease;
+    }
+    .overlay.show{ opacity:1; pointer-events:auto; }
+    .modal{
+      width:min(560px, calc(100% - 26px));
+      border-radius: 18px;
+      background: rgba(18,26,51,.92);
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    .modal h2{ margin:0 0 8px; font-size:18px; }
+    .modal p{ margin:0 0 14px; color: var(--muted); line-height:1.6; font-size:13px; }
+    .actions{ display:flex; gap:10px; flex-wrap:wrap; }
+    .btn{
+      border-radius: 12px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      cursor:pointer;
+    }
+    .btn.primary{
+      background: rgba(124,247,200,.12);
+      border-color: rgba(124,247,200,.28);
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card stage">
+      <canvas id="c"></canvas>
+
+      <div class="hud">
+        <div class="hud-top">
+          <div class="pill">階段：<strong id="phaseText">準備</strong> <span id="phaseTag" class="tag">SAFE</span></div>
+          <div class="pill">撲空：<strong id="miss">0</strong>/<strong id="missNeed">3</strong></div>
+          <div class="pill">摸頭：<strong id="pet">0</strong>（需<strong id="petNeed">0</strong>）</div>
+          <div class="pill">已撐：<strong id="survive">0.0</strong>s</div>
+        </div>
+        <div class="hint">
+          操作：按/按住右側按鈕（或 <span class="kbd">空白鍵</span>）<br>
+          撲空目標每輪隨機 1～5；達標後有<strong>緩衝 0.85s</strong>才進入摸頭。
+        </div>
+      </div>
+
+      <div class="overlay" id="overlay">
+        <div class="modal">
+          <h2 id="ovTitle">波比：麵包保衛戰</h2>
+          <p id="ovText">
+            波比站在你的手背上，盯上你手裡的麵包。<br>
+            偷吃衝刺時：按一下讓麵包閃開（撲空達本輪目標會爆氣）。<br>
+            爆氣後：按住也算摸頭，放開太久就 Game Over。
+          </p>
+          <div class="actions">
+            <button class="btn primary" id="btnStart">開始</button>
+            <button class="btn" id="btnRestart" style="display:none;">重新開始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card panel">
+      <h1>玩法按鈕</h1>
+      <p class="sub">
+        偷吃階段：按一下閃麵包。<br>
+        不爽階段：<strong>按住也算摸頭</strong>（連續維持才不會爆）。
+      </p>
+
+      <div class="controls">
+        <button class="bigbtn" id="actionBtn">按我！</button>
+        <button class="bigbtn secondary" id="resetBtn">重新開始</button>
+      </div>
+
+      <div class="row"><span>爆氣目標</span><b>每輪隨機 1～5（最多 5）</b></div>
+      <div class="row"><span>冠羽</span><b>想吃/爆氣時改三角扇狀豎起</b></div>
+      <div class="row"><span>失敗條件</span><b>咬到麵包 / 停止摸頭太久</b></div>
+
+      <div class="mini">
+        你之後想再加「咬到麵包的動畫」或「摸頭時主人手伸過來」我也能幫你補。
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  const phaseText = document.getElementById('phaseText');
+  const phaseTag  = document.getElementById('phaseTag');
+  const missEl = document.getElementById('miss');
+  const missNeedEl = document.getElementById('missNeed');
+  const petEl = document.getElementById('pet');
+  const petNeedEl = document.getElementById('petNeed');
+  const surviveEl = document.getElementById('survive');
+
+  const actionBtn = document.getElementById('actionBtn');
+  const resetBtn  = document.getElementById('resetBtn');
+
+  const overlay = document.getElementById('overlay');
+  const ovTitle = document.getElementById('ovTitle');
+  const ovText  = document.getElementById('ovText');
+  const btnStart = document.getElementById('btnStart');
+  const btnRestart = document.getElementById('btnRestart');
+
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const PHASE = {
+    READY: 'READY',
+    STEAL: 'STEAL',
+    TRANSITION: 'TRANSITION',
+    ANGRY: 'ANGRY',
+    OVER:  'OVER'
+  };
+
+  const state = {
+    running: false,
+    phase: PHASE.READY,
+
+    // steal
+    miss: 0,
+    missNeed: 3,             // random 1~5
+    attemptTimer: 0.9,
+    attemptInterval: 1.2,
+
+    lungeTime: 0,
+    lungeDur: 0.55,
+    lungeActive: false,
+    dodgeWindow: 0.26,
+    dodgedThisLunge: false,
+
+    // transition
+    transitionLeft: 0,
+    transitionDur: 0.85,
+
+    // angry/pet
+    petNeed: 24,
+    petCount: 0,
+    petDecayDelay: 0.70,
+    lastPetAt: 0,
+    holding: false,          // hold-to-pet
+    petRate: 18,             // pet units per second while holding
+    petFloat: 0,
+
+    // ui
+    msg: "",
+    msgTime: 0,
+
+    // timer
+    survive: 0,
+    best: Number(localStorage.getItem("pat_best_survive") || "0"),
+  };
+
+  const layout = {
+    handX: 0, handY: 0, handW: 0, handH: 0,
+    breadX: 0, breadY: 0, breadBaseX: 0, breadBaseY: 0,
+    breadOffset: 0,
+    breadSide: 1,
+
+    birdX: 0, birdY: 0, birdBaseX: 0, birdBaseY: 0,
+  };
+
+  function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+  function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+  function lerp(a,b,t){ return a + (b-a)*t; }
+  function easeOut(t){ return 1 - (1-t)*(1-t); }
+  function easeInOut(t){
+    return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2,2)/2;
+  }
+
+  function setMsg(text, sec=0.9){
+    state.msg = text;
+    state.msgTime = sec;
+  }
+
+  function showOverlay(title, html){
+    ovTitle.textContent = title;
+    ovText.innerHTML = html;
+    overlay.classList.add('show');
+  }
+  function hideOverlay(){ overlay.classList.remove('show'); }
+
+  function setPhase(p){
+    state.phase = p;
+
+    if (p === PHASE.STEAL){
+      phaseText.textContent = "偷吃";
+      phaseTag.textContent = "DODGE";
+      phaseTag.className = "tag warn";
+      actionBtn.textContent = "按一下：閃麵包";
+    } else if (p === PHASE.TRANSITION){
+      phaseText.textContent = "轉場";
+      phaseTag.textContent = "READY";
+      phaseTag.className = "tag warn";
+      actionBtn.textContent = "準備：快要摸頭";
+    } else if (p === PHASE.ANGRY){
+      phaseText.textContent = "不爽";
+      phaseTag.textContent = "PET!";
+      phaseTag.className = "tag danger";
+      actionBtn.textContent = "按住：摸頭安撫";
+      setMsg("牠不爽了！按住開始摸頭！", 1.0);
+      state.petCount = 0;
+      state.petFloat = 0;
+      state.lastPetAt = 0;
+    } else if (p === PHASE.OVER){
+      phaseText.textContent = "結束";
+      phaseTag.textContent = "OVER";
+      phaseTag.className = "tag danger";
+      actionBtn.textContent = "（已結束）";
+    } else {
+      phaseText.textContent = "準備";
+      phaseTag.textContent = "SAFE";
+      phaseTag.className = "tag";
+      actionBtn.textContent = "按我！";
+    }
+  }
+
+  function rollMissNeed(){
+    state.missNeed = randInt(1,5);
+    missNeedEl.textContent = String(state.missNeed);
+  }
+
+  function reset(){
+    state.running = false;
+    state.miss = 0;
+    rollMissNeed();
+
+    state.attemptTimer = 0.9;
+    state.attemptInterval = 1.2;
+
+    state.lungeTime = 0;
+    state.lungeActive = false;
+    state.dodgedThisLunge = false;
+
+    state.transitionLeft = 0;
+
+    state.petNeed = 24;
+    state.petCount = 0;
+    state.lastPetAt = 0;
+    state.holding = false;
+    state.petFloat = 0;
+
+    state.msg = "";
+    state.msgTime = 0;
+
+    layout.breadOffset = 0;
+    layout.breadSide = 1;
+
+    state.survive = 0;
+
+    setPhase(PHASE.READY);
+  }
+
+  function start(){
+    state.running = true;
+    setPhase(PHASE.STEAL);
+    setMsg(`盯——（本輪撲空 ${state.missNeed} 次會爆氣）`, 1.0);
+  }
+
+  function gameOver(reason){
+    state.running = false;
+    state.holding = false;
+    setPhase(PHASE.OVER);
+
+    if (state.survive > state.best){
+      state.best = state.survive;
+      localStorage.setItem("pat_best_survive", String(state.best));
+    }
+
+    btnRestart.style.display = "";
+    showOverlay(
+      "Game Over",
+      `${reason}<br><br>
+       這次撐了：<span class="kbd">${state.survive.toFixed(1)}s</span><br>
+       最佳時間：<span class="kbd">${state.best.toFixed(1)}s</span><br><br>
+       按「重新開始」再保護一次麵包。`
+    );
+  }
+
+  function winAngry(){
+    setMsg("呼…摸舒服了。牠暫時乖一點。", 1.0);
+    setPhase(PHASE.STEAL);
+
+    state.miss = 0;
+    rollMissNeed();
+
+    state.attemptInterval = Math.max(0.85, state.attemptInterval - 0.08);
+    state.lungeDur = Math.max(0.44, state.lungeDur - 0.02);
+    state.dodgeWindow = Math.max(0.20, state.dodgeWindow - 0.01);
+    state.attemptTimer = 1.0;
+
+    setMsg(`下一輪：撲空 ${state.missNeed} 次會爆氣`, 1.0);
+  }
+
+  function beginLunge(){
+    state.lungeActive = true;
+    state.lungeTime = 0;
+    state.dodgedThisLunge = false;
+    setMsg("派特：我要咬！", 0.6);
+  }
+
+  function checkBite(){
+    if (!state.dodgedThisLunge){
+      gameOver("派特咬到麵包了！麵包被偷走一口。");
+    }
+  }
+
+  function pressOnce(){
+    if (!state.running) return;
+
+    if (state.phase === PHASE.STEAL){
+      if (state.lungeActive && !state.dodgedThisLunge){
+        if (state.lungeTime <= state.dodgeWindow){
+          state.dodgedThisLunge = true;
+          state.miss += 1;
+
+          layout.breadSide *= -1;
+          layout.breadOffset = 1.0;
+          setMsg("啪！麵包閃開！", 0.55);
+
+          if (state.miss >= state.missNeed){
+            state.lungeActive = false;
+            state.lungeTime = 0;
+            state.transitionLeft = state.transitionDur;
+            setPhase(PHASE.TRANSITION);
+            setMsg("（牠愣住了…下一秒要爆氣）", 0.9);
+          }
+        } else {
+          setMsg("太慢了！", 0.5);
+        }
+      } else {
+        setMsg("先等等…牠還沒衝！", 0.4);
+      }
+    } else if (state.phase === PHASE.TRANSITION){
+      setMsg("準備中…等爆氣就按住摸頭！", 0.35);
+    } else if (state.phase === PHASE.ANGRY){
+      // tap also counts as a tiny pet
+      state.petFloat += 1.0;
+      state.lastPetAt = 0;
+      layout.breadOffset = Math.max(layout.breadOffset, 0.25);
+    }
+  }
+
+  function setHolding(on){
+    state.holding = on;
+    if (on && state.phase === PHASE.ANGRY){
+      state.lastPetAt = 0;
+    }
+  }
+
+  // Pointer events (mouse+touch)
+  actionBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    pressOnce();
+    setHolding(true);
+  });
+  window.addEventListener('pointerup', () => setHolding(false));
+  window.addEventListener('pointercancel', () => setHolding(false));
+  actionBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  resetBtn.addEventListener('click', () => { hideOverlay(); reset(); start(); });
+
+  // Keyboard: Space supports hold
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space'){
+      e.preventDefault();
+      if (!e.repeat) pressOnce();
+      setHolding(true);
+    }
+  }, {passive:false});
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') setHolding(false);
+  });
+
+  btnStart.addEventListener('click', () => { hideOverlay(); reset(); start(); });
+  btnRestart.addEventListener('click', () => { hideOverlay(); reset(); start(); });
+
+  function drawRoundedRect(x,y,w,h,r){
+    r = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  function gradientSky(w,h){
+    const g = ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0, "rgba(255,255,255,.06)");
+    g.addColorStop(1, "rgba(255,255,255,.02)");
+    return g;
+  }
+
+  function drawHumanAndHand(w,h){
+    ctx.fillStyle = "rgba(6,10,22,0.92)";
+    ctx.fillRect(0,0,w,h);
+    ctx.fillStyle = gradientSky(w,h);
+    ctx.fillRect(0,0,w,h);
+
+    const vg = ctx.createRadialGradient(w*0.5,h*0.45, 20, w*0.5,h*0.45, Math.max(w,h)*0.7);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, "rgba(0,0,0,0.35)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0,0,w,h);
+
+    const tableY = h*0.70;
+    ctx.fillStyle = "rgba(255,255,255,0.04)";
+    ctx.fillRect(0, tableY, w, h-tableY);
+
+    // left arm + hand (platform)
+    ctx.fillStyle = "rgba(255,225,205,0.85)";
+    ctx.strokeStyle = "rgba(0,0,0,0.10)";
+    ctx.lineWidth = 2;
+
+    const ax = w*0.18, ay = h*0.70;
+    const aw = w*0.58, ah = h*0.16;
+    drawRoundedRect(ax, ay, aw, ah, 32);
+    ctx.fill(); ctx.stroke();
+
+    layout.handX = w*0.45;
+    layout.handY = h*0.62;
+    layout.handW = w*0.28;
+    layout.handH = h*0.16;
+
+    ctx.fillStyle = "rgba(255,225,205,0.92)";
+    drawRoundedRect(layout.handX, layout.handY, layout.handW, layout.handH, 34);
+    ctx.fill(); ctx.stroke();
+
+    // right arm + palm holding bread
+    const rx = w*0.70, ry = h*0.27;
+    const rw = w*0.22, rh = h*0.16;
+
+    ctx.fillStyle = "rgba(255,225,205,0.78)";
+    drawRoundedRect(w*0.64, h*0.40, w*0.33, h*0.12, 26);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,225,205,0.92)";
+    drawRoundedRect(rx, ry, rw, rh, 28);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.10)";
+    ctx.stroke();
+
+    layout.breadBaseX = rx + rw*0.22;
+    layout.breadBaseY = ry + rh*0.40;
+  }
+
+  function drawBread(){
+    const side = layout.breadSide;
+    const offset = layout.breadOffset;
+    const dodgeX = side * (24 * easeOut(offset));
+    const dodgeY = -6 * easeOut(offset);
+
+    layout.breadX = layout.breadBaseX + dodgeX;
+    layout.breadY = layout.breadBaseY + dodgeY;
+
+    ctx.save();
+    ctx.translate(layout.breadX, layout.breadY);
+
+    ctx.shadowColor = "rgba(0,0,0,0.25)";
+    ctx.shadowBlur = 14;
+
+    ctx.fillStyle = "rgba(255,216,150,0.95)";
+    ctx.strokeStyle = "rgba(0,0,0,0.10)";
+    ctx.lineWidth = 2;
+
+    drawRoundedRect(-34,-18, 72, 44, 16);
+    ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = "rgba(235,170,90,0.95)";
+    drawRoundedRect(-34,-18, 72, 18, 14);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(0,0,0,0.10)";
+    for (let i=0;i<5;i++){
+      ctx.beginPath();
+      ctx.ellipse(-10 + i*12, 6 + (i%2)*4, 3.5, 2.8, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // Q 版玄鳳（派特配色：灰身、黃臉、橘腮紅、粉紅腳腳）
+  // crest：想吃/爆氣（mood=angry）時改成三角扇狀豎起；放鬆/正常保持柔和
+  function drawCockatiel(x,y,scale, mood){
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.scale(scale,scale);
+
+    // shadow
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(0, 34, 32, 10, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // body
+    ctx.fillStyle = "rgba(210,215,224,0.96)";
+    ctx.strokeStyle = "rgba(0,0,0,0.12)";
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.ellipse(0, 10, 34, 28, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+
+    // wing
+    ctx.fillStyle = "rgba(190,196,208,0.95)";
+    ctx.beginPath();
+    ctx.ellipse(10, 12, 20, 18, -0.4, 0, Math.PI*2);
+    ctx.fill();
+
+    // tail
+    ctx.fillStyle = "rgba(175,182,197,0.95)";
+    ctx.beginPath();
+    ctx.moveTo(-10, 22);
+    ctx.quadraticCurveTo(0, 52, 10, 22);
+    ctx.closePath();
+    ctx.fill();
+
+    // head
+    ctx.fillStyle = "rgba(255,232,144,0.98)";
+    ctx.beginPath();
+    ctx.ellipse(-6, -16, 24, 22, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.10)";
+    ctx.stroke();
+
+    // crest（玄鳳冠羽）
+// angry：竹筍頭（錐形羽束 + 羽絲）
+// normal：維持柔和
+if (mood === "angry") {
+  // 竹筍輪廓（底寬、上尖、微弧）
+  ctx.save();
+
+  // 羽束顏色：偏淡黃 + 一點陰影
+  ctx.fillStyle = "rgba(255,236,160,0.98)";
+  ctx.strokeStyle = "rgba(0,0,0,0.08)";
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+
+  // 位置：頭頂
+  // 你可以微調 baseX/baseY 來更貼合你想要的頭頂位置
+  const baseX = -4;
+  const baseY = -38;
+
+  // 尖端：越尖越像竹筍（topY 越小越高）
+  const topX = -2;
+  const topY = -66;
+
+  // 底部寬度（越大越“筍”）
+  const baseW = 18;
+
+  // 畫一個帶弧度的錐形羽束
+  ctx.beginPath();
+  ctx.moveTo(baseX - baseW/2, baseY);
+  ctx.quadraticCurveTo(baseX - baseW*0.35, (baseY+topY)/2, topX, topY);     // 左側弧到尖
+  ctx.quadraticCurveTo(baseX + baseW*0.35, (baseY+topY)/2, baseX + baseW/2, baseY); // 右側弧回底
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 羽束內部紋理（像羽絲的分叉）
+  ctx.strokeStyle = "rgba(120,100,60,0.12)";
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = "round";
+  // 中央主線
+  ctx.beginPath();
+  ctx.moveTo(baseX, baseY-2);
+  ctx.quadraticCurveTo(baseX+1, (baseY+topY)/2, topX, topY+4);
+  ctx.stroke();
+  // 左右輕微分線
+  ctx.beginPath();
+  ctx.moveTo(baseX-4, baseY-2);
+  ctx.quadraticCurveTo(baseX-5, (baseY+topY)/2, topX-4, topY+10);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(baseX+4, baseY-2);
+  ctx.quadraticCurveTo(baseX+6, (baseY+topY)/2, topX+4, topY+10);
+  ctx.stroke();
+
+  // 幾根更長的羽絲（你照片那種“尖尖毛絲”感）
+  ctx.strokeStyle = "rgba(255,236,160,0.95)";
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(baseX-2, topY+10);
+  ctx.quadraticCurveTo(baseX-6, topY-6, topX-3, topY-14);
+  ctx.stroke();
+
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(baseX+2, topY+12);
+  ctx.quadraticCurveTo(baseX+8, topY-2, topX+5, topY-12);
+  ctx.stroke();
+
+  ctx.restore();
+} else {
+  // 放鬆冠羽（柔和兩條）
+  ctx.strokeStyle = "rgba(255,232,144,0.98)";
+  ctx.lineWidth = 6;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-14, -34);
+  ctx.quadraticCurveTo(-18, -48, -6, -40);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-6, -36);
+  ctx.quadraticCurveTo(-4, -52, 6, -40);
+  ctx.stroke();
+}
+
+
+    // cheeks
+    ctx.fillStyle = "rgba(255,155,90,0.95)";
+    ctx.beginPath(); ctx.ellipse(-22, -14, 6.5, 6, 0, 0, Math.PI*2); ctx.fill();
+
+    // beak
+    ctx.fillStyle = "rgba(90,94,105,0.92)";
+    ctx.beginPath();
+    ctx.moveTo(-34, -10);
+    ctx.quadraticCurveTo(-42, -6, -34, -2);
+    ctx.quadraticCurveTo(-26, -6, -34, -10);
+    ctx.closePath();
+    ctx.fill();
+
+    // eyes
+    const eyeY = -22;
+    if (mood === "angry"){
+      ctx.strokeStyle = "rgba(0,0,0,0.70)";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(-14, eyeY); ctx.lineTo(-6, eyeY-2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-2, eyeY); ctx.lineTo(6, eyeY-2); ctx.stroke();
+    } else {
+      ctx.fillStyle = "rgba(0,0,0,0.70)";
+      ctx.beginPath(); ctx.arc(-10, eyeY, 3.2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(  2, eyeY, 3.2, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath(); ctx.arc(-11, eyeY-1, 1.2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(  1, eyeY-1, 1.2, 0, Math.PI*2); ctx.fill();
+    }
+
+    // feet (pink)
+    ctx.strokeStyle = "rgba(255,155,190,0.95)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-10, 30); ctx.lineTo(-14, 40);
+    ctx.moveTo(-6,  30); ctx.lineTo(-8,  40);
+    ctx.moveTo( 6,  30); ctx.lineTo( 4,  40);
+    ctx.moveTo(10,  30); ctx.lineTo( 12, 40);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // Speech bubble: avoid both top HUD & bottom hint area
+  function drawSpeech(text, w, h){
+    if (!text) return;
+
+    ctx.save();
+    ctx.font = "600 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Arial";
+
+    const padX = 10, padY = 8;
+    const m = ctx.measureText(text);
+    const bw = m.width + padX*2;
+    const bh = 18 + padY*2;
+
+    // Safe vertical band (avoid top HUD pills + bottom hint)
+    const topSafe = 90;
+    const bottomSafe = 96;
+
+    let x = 16;
+    let y = h - bottomSafe - bh - 10;
+
+    y = clamp(y, topSafe, h - bottomSafe - bh);
+
+    ctx.shadowColor = "rgba(0,0,0,0.30)";
+    ctx.shadowBlur = 16;
+
+    ctx.fillStyle = "rgba(18,26,51,0.86)";
+    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+    ctx.lineWidth = 1;
+
+    drawRoundedRect(x, y, bw, bh, 12);
+    ctx.fill(); ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(x+18, y+bh);
+    ctx.lineTo(x+28, y+bh);
+    ctx.lineTo(x+22, y+bh+10);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(234,240,255,0.95)";
+    ctx.fillText(text, x+padX, y+padY+14);
+
+    ctx.restore();
+  }
+
+  function updateLayout(w,h){
+    layout.birdBaseX = w*0.53;
+    layout.birdBaseY = w*0.0 + h*0.64;
+  }
+
+  // Main loop
+  let last = performance.now();
+  function tick(){
+    requestAnimationFrame(tick);
+    const now = performance.now();
+    const dt = Math.min(0.033, (now-last)/1000);
+    last = now;
+
+    // timers
+    if (state.msgTime > 0){
+      state.msgTime = Math.max(0, state.msgTime - dt);
+      if (state.msgTime === 0) state.msg = "";
+    }
+
+    if (state.running){
+      state.survive += dt;
+    }
+
+    // bread animation ease-out
+    layout.breadOffset = Math.max(0, layout.breadOffset - dt*3.2);
+
+    // phase logic
+    if (state.running){
+      if (state.phase === PHASE.STEAL){
+        if (!state.lungeActive){
+          state.attemptTimer -= dt;
+          if (state.attemptTimer <= 0){
+            beginLunge();
+          }
+        } else {
+          state.lungeTime += dt;
+          const p = clamp(state.lungeTime / state.lungeDur, 0, 1);
+
+          // bird lunge path
+          let k;
+          if (p < 0.6) k = easeInOut(p/0.6);
+          else k = 1 - easeInOut((p-0.6)/0.4);
+
+          const tx = layout.breadX - 20;
+          const ty = layout.breadY + 6;
+          layout.birdX = lerp(layout.birdBaseX, tx, k);
+          layout.birdY = lerp(layout.birdBaseY, ty, k);
+
+          if (p >= 1){
+            // if not dodged -> bite
+            checkBite();
+            state.lungeActive = false;
+            state.attemptTimer = state.attemptInterval;
+          }
+        }
+      } else if (state.phase === PHASE.TRANSITION){
+        state.transitionLeft -= dt;
+        if (state.transitionLeft <= 0){
+          setPhase(PHASE.ANGRY);
+        }
+      } else if (state.phase === PHASE.ANGRY){
+        // hold-to-pet accumulation
+        state.lastPetAt += dt;
+
+        if (state.holding){
+          state.lastPetAt = 0;
+          state.petFloat += state.petRate * dt;
+        }
+
+        // convert float to integer count for UI
+        const inc = Math.floor(state.petFloat);
+        if (inc > 0){
+          state.petFloat -= inc;
+          state.petCount += inc;
+          if (state.petCount % 6 === 0) setMsg("摸…舒服…", 0.25);
+        }
+
+        // stop petting too long -> game over
+        if (state.lastPetAt > state.petDecayDelay){
+          gameOver("你沒有持續摸頭…派特更火了，直接開咬！");
+        }
+
+        if (state.petCount >= state.petNeed){
+          winAngry();
+        }
+      }
+    }
+
+    // UI update
+    missEl.textContent = String(state.miss);
+    petEl.textContent = String(Math.min(state.petCount, state.petNeed));
+    petNeedEl.textContent = String(state.petNeed);
+    surviveEl.textContent = state.survive.toFixed(1);
+
+    // draw
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+
+    ctx.clearRect(0,0,w,h);
+    updateLayout(w,h);
+
+    drawHumanAndHand(w,h);
+    drawBread();
+
+    // bird mood: 偷吃衝刺（lungeActive）也用 angry 讓冠羽豎起
+    const birdMood =
+      (state.phase === PHASE.ANGRY) ? "angry" :
+      (state.lungeActive) ? "angry" :
+      "normal";
+
+    // bird position
+    if (!state.lungeActive){
+      layout.birdX = layout.birdBaseX;
+      layout.birdY = layout.birdBaseY + Math.sin(now/220)*3;
+    }
+
+    drawCockatiel(layout.birdX, layout.birdY, 1.0, birdMood);
+
+    // show speech bubble safely
+    drawSpeech(state.msg, w, h);
+  }
+
+  // boot
+  reset();
+  showOverlay("波比：麵包保衛戰",
+    "按「開始」就能玩！<br>偷吃時按一下閃麵包；爆氣後按住摸頭，放開太久就 Game Over。<br>每輪撲空目標隨機 1～5。"
+  );
+  tick();
+})();
+</script>
+</body>
+</html>
