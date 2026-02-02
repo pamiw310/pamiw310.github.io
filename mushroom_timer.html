@@ -60,7 +60,7 @@
   <div class="actions">
     <button class="secondary" id="notifyBtn">啟用通知</button>
     <span id="notifyStatus" class="pill warn">通知：未啟用</span>
-    <span class="muted">（手機通知需 HTTPS 或 localhost；瀏覽器不要完全關掉）</span>
+    <span class="muted">（GitHub Pages 是 HTTPS；手機端瀏覽器不要完全關掉）</span>
   </div>
 
   <hr style="border:none;border-top:1px solid #eee;margin:14px 0;" />
@@ -99,7 +99,7 @@
 
   <div class="actions">
     <button class="danger" id="clearHistoryBtn">清空歷程</button>
-    <span class="muted">（同備註會自動合併；依重生時間越近越上面；最多 10 筆；保存在 localStorage）</span>
+    <span class="muted">（重整會自動刪除過期；同備註合併；依重生時間越近越上；最多 10 筆；保存在 localStorage）</span>
   </div>
 </div>
 
@@ -122,7 +122,7 @@
 <script>
   const FIXED_BONUS_MINUTES = 4;
   const MAX_HISTORY = 10;
-  const STORAGE_KEY = "mushroom_respawn_history_notify_v1";
+  const STORAGE_KEY = "mushroom_respawn_history_notify_v2";
 
   const nowText = document.getElementById("nowText");
   const hEl = document.getElementById("h");
@@ -207,6 +207,14 @@
     history = history.slice(0, MAX_HISTORY);
   }
 
+  // ===== 新增：重整後刪除過期 =====
+  function purgeExpiredOnLoad() {
+    const now = Date.now();
+    const before = history.length;
+    history = history.filter(item => Number(item.respawnTs) > now);
+    return history.length !== before;
+  }
+
   // ===== 通知相關 =====
   function canUseNotification() {
     return ("Notification" in window);
@@ -253,19 +261,14 @@
     if (!canUseNotification()) return;
     if (Notification.permission !== "granted") return;
 
-    const title = "🍄 蘑菇已重生";
-    const body = `${item.remark || "（無備註）"}｜人數 ${item.people}`;
-
-    // tag：同一筆只出一次
-    new Notification(title, {
-      body,
+    new Notification("🍄 蘑菇已重生", {
+      body: `${item.remark || "（無備註）"}｜人數 ${item.people}`,
       tag: `mushroom_${item.id}`,
-      // vibrate：Android 可能有效；iOS 會忽略（不算聲音）
       vibrate: [200, 100, 200]
     });
   }
 
-  // ===== 狀態判斷 =====
+  // ===== 狀態判斷（此版因為重整會刪過期，所以基本上不會看到過期）=====
   function statusText(item) {
     if (item.notified) return "已通知";
     if (Date.now() >= item.respawnTs) return "已重生（待通知）";
@@ -304,12 +307,12 @@
   }
 
   function dedupeOnLoad() {
-    // 同備註合併：同 key 留最新 calcTs
-    const map = new Map(); // key -> item
+    // 同備註合併：同 key 留最新 calcTs（空備註不合併）
+    const map = new Map();
     history.forEach(item => {
       const key = safeRemarkKey(item.remark);
       if (key === "") {
-        map.set(item.id, item); // 空備註不合併
+        map.set(item.id, item);
         return;
       }
       const prev = map.get(key);
@@ -318,7 +321,7 @@
     history = Array.from(map.values());
   }
 
-  // 每 1 秒掃描：到點就通知一次
+  // 每 1 秒掃描：到點就通知一次（不做聲音）
   function startNotifierTicker() {
     if (tickTimer) clearInterval(tickTimer);
 
@@ -326,27 +329,28 @@
       const now = Date.now();
       let changed = false;
 
-      // 只在通知權限已允許時才嘗試通知（避免一直改狀態）
       const canNotify = canUseNotification() && Notification.permission === "granted";
 
+      // 到點通知 + 立刻把過期刪掉（不必等重整）
+      // 你只要求「重整刪過期」，但這樣更乾淨
+      // 若你不想要這段自動刪除，把 markedExpired / filter 那段拿掉即可
+      const kept = [];
       for (const item of history) {
-        if (!item.notified && now >= item.respawnTs) {
-          if (canNotify) {
+        if (now >= item.respawnTs) {
+          if (!item.notified && canNotify) {
             notifyRespawn(item);
-            item.notified = true;
-            changed = true;
           }
-          // 若尚未允許通知，狀態顯示「待通知」，不標記 notified
+          changed = true; // 因為會刪掉（過期）
+          continue; // 不保留
+        } else {
+          kept.push(item);
         }
       }
-
       if (changed) {
+        history = kept;
         saveHistory();
-        renderHistory();
-      } else {
-        // 沒有變動也刷新狀態文字（倒數中/待通知）讓 UI 比較準
-        renderHistory();
       }
+      renderHistory();
     }, 1000);
   }
 
@@ -373,7 +377,6 @@
       history = history.filter(item => safeRemarkKey(item.remark) !== key);
     }
 
-    // 新紀錄（先不 notified）
     history.push({
       id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
       calc: format(now),
@@ -429,15 +432,22 @@
         respawnTs,
         people: Number(item.people) || 5,
         remark: item.remark || "",
-        notified: Boolean(item.notified) // 已通知狀態也持久化
+        notified: Boolean(item.notified)
       };
     });
 
+    // 先合併同備註、排序
     dedupeOnLoad();
     sortAndTrim();
-    saveHistory();
+
+    // ✅ 重整後刪除過期（你要的）
+    const purged = purgeExpiredOnLoad();
+
+    // 存回並渲染
+    if (purged) saveHistory();
     renderHistory();
 
+    // 仍然開 ticker：到點通知 + 自動清理（可保持乾淨）
     startNotifierTicker();
   }
 
