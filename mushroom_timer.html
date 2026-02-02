@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>蘑菇重生時間計算器</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
+      padding: 24px;
+      max-width: 900px;
+      margin: auto;
+    }
+    h2 { margin-top: 28px; }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: end;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+    input {
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      width: 120px;
+    }
+    input.remark {
+      width: 260px;
+    }
+    button {
+      padding: 10px 14px;
+      font-size: 16px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+    }
+    .primary { background: #111; color: #fff; }
+    .secondary { background: #eee; }
+    .muted { color: #666; font-size: 14px; }
+    .big { font-size: 20px; font-weight: 700; }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    th, td {
+      border-bottom: 1px solid #eee;
+      padding: 8px;
+      text-align: left;
+      font-size: 14px;
+    }
+    th {
+      background: #fafafa;
+    }
+  </style>
+</head>
+<body>
+
+<h1>蘑菇重生時間計算器</h1>
+
+<div class="card">
+  <div class="muted">
+    目前系統時間：<span id="nowText" class="mono"></span>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:14px 0;" />
+
+  <div class="row">
+    <div>
+      <label>剩餘（時）</label>
+      <input id="h" type="number" min="0" value="0">
+    </div>
+    <div>
+      <label>剩餘（分）</label>
+      <input id="m" type="number" min="0" value="0">
+    </div>
+    <div>
+      <label>剩餘（秒）</label>
+      <input id="s" type="number" min="0" value="0">
+    </div>
+    <div>
+      <label>備註</label>
+      <input id="remark" class="remark" type="text" placeholder="例如：東邊第三朵">
+    </div>
+    <div>
+      <button class="primary" id="calcBtn">計算</button>
+      <button class="secondary" id="resetBtn">重置</button>
+    </div>
+  </div>
+
+  <div id="resultBox" style="display:none;margin-top:12px;">
+    <div class="muted">蘑菇重生時間</div>
+    <div class="big mono" id="respawnText"></div>
+  </div>
+</div>
+
+<h2>⏱ 計算歷程（最多 10 筆）</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>計算時間</th>
+      <th>重生時間</th>
+      <th>備註</th>
+    </tr>
+  </thead>
+  <tbody id="historyBody">
+  </tbody>
+</table>
+
+<script>
+  const FIXED_BONUS_MINUTES = 4;
+
+  const nowText = document.getElementById("nowText");
+  const hEl = document.getElementById("h");
+  const mEl = document.getElementById("m");
+  const sEl = document.getElementById("s");
+  const remarkEl = document.getElementById("remark");
+  const respawnText = document.getElementById("respawnText");
+  const resultBox = document.getElementById("resultBox");
+  const historyBody = document.getElementById("historyBody");
+
+  let history = [];
+
+  const pad2 = n => String(n).padStart(2, "0");
+  const format = d =>
+    `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} `
+    + `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+
+  function updateNow() {
+    nowText.textContent = format(new Date());
+  }
+
+  function normalize() {
+    let h = Math.max(0, hEl.value | 0);
+    let m = Math.max(0, mEl.value | 0);
+    let s = Math.max(0, sEl.value | 0);
+
+    m += Math.floor(s / 60);
+    s %= 60;
+    h += Math.floor(m / 60);
+    m %= 60;
+
+    hEl.value = h; mEl.value = m; sEl.value = s;
+    return { h, m, s };
+  }
+
+  function renderHistory() {
+    historyBody.innerHTML = "";
+    history.forEach(item => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="mono">${item.calc}</td>
+        <td class="mono">${item.respawn}</td>
+        <td>${item.remark || "-"}</td>
+      `;
+      historyBody.appendChild(tr);
+    });
+  }
+
+  document.getElementById("calcBtn").onclick = () => {
+    const { h, m, s } = normalize();
+    const now = new Date();
+    const target = new Date(
+      now.getTime()
+      + (h * 3600 + m * 60 + s) * 1000
+      + FIXED_BONUS_MINUTES * 60 * 1000
+    );
+
+    respawnText.textContent = format(target);
+    resultBox.style.display = "block";
+
+    history.unshift({
+      calc: format(now),
+      respawn: format(target),
+      remark: remarkEl.value.trim()
+    });
+
+    history = history.slice(0, 10);
+    renderHistory();
+  };
+
+  document.getElementById("resetBtn").onclick = () => {
+    hEl.value = mEl.value = sEl.value = 0;
+    remarkEl.value = "";
+    resultBox.style.display = "none";
+  };
+
+  updateNow();
+  setInterval(updateNow, 1000);
+</script>
+
+</body>
+</html>
