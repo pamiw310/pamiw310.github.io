@@ -8,67 +8,35 @@
     body {
       font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
       padding: 24px;
-      max-width: 900px;
+      max-width: 980px;
       margin: auto;
     }
     h2 { margin-top: 28px; }
-    .card {
-      border: 1px solid #ddd;
-      border-radius: 12px;
-      padding: 16px;
-    }
-    .row {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      align-items: end;
-    }
-    label {
-      display: block;
-      font-size: 14px;
-      margin-bottom: 6px;
-    }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+    label { display: block; font-size: 14px; margin-bottom: 6px; }
     input {
-      padding: 10px;
-      font-size: 16px;
-      border-radius: 10px;
-      border: 1px solid #ccc;
-      width: 120px;
+      padding: 10px; font-size: 16px; border-radius: 10px;
+      border: 1px solid #ccc; width: 110px;
     }
+    input.people { width: 80px; }
     input.remark { width: 260px; }
     button {
-      padding: 10px 14px;
-      font-size: 16px;
-      border-radius: 10px;
-      border: none;
-      cursor: pointer;
+      padding: 10px 14px; font-size: 16px; border-radius: 10px;
+      border: none; cursor: pointer;
     }
     .primary { background: #111; color: #fff; }
     .secondary { background: #eee; }
     .danger { background: #ffe9e9; }
-    .tiny {
-      padding: 6px 10px;
-      font-size: 14px;
-      border-radius: 10px;
-    }
+    .tiny { padding: 6px 10px; font-size: 14px; border-radius: 10px; }
     .muted { color: #666; font-size: 14px; }
     .big { font-size: 20px; font-weight: 700; }
     .mono {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-variant-numeric: tabular-nums;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 12px;
-    }
-    th, td {
-      border-bottom: 1px solid #eee;
-      padding: 8px;
-      text-align: left;
-      font-size: 14px;
-      vertical-align: top;
-    }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; font-size: 14px; vertical-align: top; }
     th { background: #fafafa; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
   </style>
@@ -98,6 +66,10 @@
       <input id="s" type="number" min="0" value="0">
     </div>
     <div>
+      <label>人數</label>
+      <input id="people" class="people" type="number" min="1" value="5">
+    </div>
+    <div>
       <label>備註</label>
       <input id="remark" class="remark" type="text" placeholder="例如：東邊第三朵">
     </div>
@@ -114,19 +86,20 @@
 
   <div class="actions">
     <button class="danger" id="clearHistoryBtn">清空歷程</button>
-    <span class="muted">（歷程會保存在此瀏覽器 localStorage，最多 10 筆）</span>
+    <span class="muted">（同備註會自動合併；依重生時間越近越上面；最多 10 筆；保存在 localStorage）</span>
   </div>
 </div>
 
-<h2>⏱ 計算歷程（最多 10 筆）</h2>
+<h2>⏱ 計算歷程</h2>
 
 <table>
   <thead>
     <tr>
       <th>計算時間</th>
       <th>重生時間</th>
+      <th>人數</th>
       <th>備註</th>
-      <th style="width: 88px;">操作</th>
+      <th style="width:88px;">操作</th>
     </tr>
   </thead>
   <tbody id="historyBody"></tbody>
@@ -135,12 +108,13 @@
 <script>
   const FIXED_BONUS_MINUTES = 4;
   const MAX_HISTORY = 10;
-  const STORAGE_KEY = "mushroom_respawn_history_v1";
+  const STORAGE_KEY = "mushroom_respawn_history_v3";
 
   const nowText = document.getElementById("nowText");
   const hEl = document.getElementById("h");
   const mEl = document.getElementById("m");
   const sEl = document.getElementById("s");
+  const peopleEl = document.getElementById("people");
   const remarkEl = document.getElementById("remark");
   const respawnText = document.getElementById("respawnText");
   const resultBox = document.getElementById("resultBox");
@@ -162,6 +136,7 @@
     let h = Math.max(0, Math.floor(Number(hEl.value) || 0));
     let m = Math.max(0, Math.floor(Number(mEl.value) || 0));
     let s = Math.max(0, Math.floor(Number(sEl.value) || 0));
+    let people = Math.max(1, Math.floor(Number(peopleEl.value) || 5));
 
     m += Math.floor(s / 60);
     s %= 60;
@@ -171,34 +146,11 @@
     hEl.value = h;
     mEl.value = m;
     sEl.value = s;
+    peopleEl.value = people;
 
-    return { h, m, s };
+    return { h, m, s, people };
   }
 
-  function saveHistory() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-    } catch (e) {
-      console.warn("localStorage 儲存失敗：", e);
-    }
-  }
-
-  function loadHistory() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed
-        .filter(x => x && typeof x.calc === "string" && typeof x.respawn === "string")
-        .slice(0, MAX_HISTORY);
-    } catch (e) {
-      console.warn("localStorage 讀取失敗：", e);
-      return [];
-    }
-  }
-
-  // 避免備註被當成 HTML 注入
   function escapeHtml(str) {
     return String(str)
       .replaceAll("&", "&amp;")
@@ -208,105 +160,36 @@
       .replaceAll("'", "&#39;");
   }
 
-  function deleteHistoryById(id) {
-    history = history.filter(item => item.id !== id);
-    saveHistory();
-    renderHistory();
+  function safeRemarkKey(raw) {
+    // 用來做「同備註合併」的 key：去前後空白
+    return (raw || "").trim();
+  }
+
+  function saveHistory() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+  }
+
+  function loadHistory() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      return arr;
+    } catch {
+      return [];
+    }
+  }
+
+  function sortAndTrim() {
+    // 依重生時間（越近=越早發生）排最上面
+    // respawnTs 小的在前；同時間用 calcTs 大的在前（較新的先）
+    history.sort((a, b) => {
+      if (a.respawnTs !== b.respawnTs) return a.respawnTs - b.respawnTs;
+      return b.calcTs - a.calcTs;
+    });
+    history = history.slice(0, MAX_HISTORY);
   }
 
   function renderHistory() {
-    historyBody.innerHTML = "";
-
-    if (history.length === 0) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td colspan="4" class="muted">尚無紀錄</td>`;
-      historyBody.appendChild(tr);
-      return;
-    }
-
-    history.forEach(item => {
-      const tr = document.createElement("tr");
-
-      const remarkSafe = item.remark ? escapeHtml(item.remark) : "-";
-
-      tr.innerHTML = `
-        <td class="mono">${item.calc}</td>
-        <td class="mono">${item.respawn}</td>
-        <td>${remarkSafe}</td>
-        <td>
-          <button class="danger tiny" data-del-id="${item.id}">刪除</button>
-        </td>
-      `;
-      historyBody.appendChild(tr);
-    });
-
-    // 綁定刪除事件（事件委派也行，但這樣直覺）
-    historyBody.querySelectorAll("button[data-del-id]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-del-id");
-        deleteHistoryById(id);
-      });
-    });
-  }
-
-  document.getElementById("calcBtn").onclick = () => {
-    const { h, m, s } = normalize();
-    const now = new Date();
-    const target = new Date(
-      now.getTime()
-      + (h * 3600 + m * 60 + s) * 1000
-      + FIXED_BONUS_MINUTES * 60 * 1000
-    );
-
-    respawnText.textContent = format(target);
-    resultBox.style.display = "block";
-
-    // 用時間+亂數做簡單 id（足夠用於刪除）
-    const id = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-
-    history.unshift({
-      id,
-      calc: format(now),
-      respawn: format(target),
-      remark: remarkEl.value.trim()
-    });
-
-    history = history.slice(0, MAX_HISTORY);
-    saveHistory();
-    renderHistory();
-  };
-
-  document.getElementById("resetBtn").onclick = () => {
-    hEl.value = 0;
-    mEl.value = 0;
-    sEl.value = 0;
-    remarkEl.value = "";
-    resultBox.style.display = "none";
-  };
-
-  clearHistoryBtn.onclick = () => {
-    history = [];
-    saveHistory();
-    renderHistory();
-  };
-
-  // 初始化：讀取 localStorage
-  history = loadHistory();
-
-  // 舊版資料沒有 id 的話，補 id（避免你之前已經存過的紀錄讀進來後無法刪）
-  history = history.map(item => ({
-    id: item.id || `${Date.now()}_${Math.random().toString(16).slice(2)}`,
-    calc: item.calc,
-    respawn: item.respawn,
-    remark: item.remark || ""
-  })).slice(0, MAX_HISTORY);
-
-  saveHistory();
-  renderHistory();
-
-  updateNow();
-  setInterval(updateNow, 1000);
-</script>
-
-</body>
-</html>
+   
