@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>蘑菇重生時間計算器</title>
+  <title>蘑菇重生時間計算器（通知版）</title>
   <style>
     body {
       font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
@@ -39,15 +39,28 @@
     th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; font-size: 14px; vertical-align: top; }
     th { background: #fafafa; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+    .pill {
+      display:inline-block; padding: 4px 10px; border-radius: 999px;
+      border: 1px solid #ddd; font-size: 12px;
+    }
+    .ok { background: #f4fff4; }
+    .warn { background: #fff7e6; }
+    .bad { background: #ffecec; }
   </style>
 </head>
 <body>
 
-<h1>蘑菇重生時間計算器</h1>
+<h1>蘑菇重生時間計算器（通知版）</h1>
 
 <div class="card">
   <div class="muted">
     目前系統時間：<span id="nowText" class="mono"></span>
+  </div>
+
+  <div class="actions">
+    <button class="secondary" id="notifyBtn">啟用通知</button>
+    <span id="notifyStatus" class="pill warn">通知：未啟用</span>
+    <span class="muted">（手機通知需 HTTPS 或 localhost；瀏覽器不要完全關掉）</span>
   </div>
 
   <hr style="border:none;border-top:1px solid #eee;margin:14px 0;" />
@@ -80,7 +93,7 @@
   </div>
 
   <div id="resultBox" style="display:none;margin-top:12px;">
-    <div class="muted">蘑菇重生時間</div>
+    <div class="muted">蘑菇重生時間（已包含固定 +4 分鐘）</div>
     <div class="big mono" id="respawnText"></div>
   </div>
 
@@ -99,6 +112,7 @@
       <th>重生時間</th>
       <th>人數</th>
       <th>備註</th>
+      <th>狀態</th>
       <th style="width:88px;">操作</th>
     </tr>
   </thead>
@@ -108,7 +122,7 @@
 <script>
   const FIXED_BONUS_MINUTES = 4;
   const MAX_HISTORY = 10;
-  const STORAGE_KEY = "mushroom_respawn_history_v3";
+  const STORAGE_KEY = "mushroom_respawn_history_notify_v1";
 
   const nowText = document.getElementById("nowText");
   const hEl = document.getElementById("h");
@@ -121,7 +135,11 @@
   const historyBody = document.getElementById("historyBody");
   const clearHistoryBtn = document.getElementById("clearHistoryBtn");
 
+  const notifyBtn = document.getElementById("notifyBtn");
+  const notifyStatus = document.getElementById("notifyStatus");
+
   let history = [];
+  let tickTimer = null;
 
   const pad2 = n => String(n).padStart(2, "0");
   const format = d =>
@@ -161,7 +179,6 @@
   }
 
   function safeRemarkKey(raw) {
-    // 用來做「同備註合併」的 key：去前後空白
     return (raw || "").trim();
   }
 
@@ -182,8 +199,7 @@
   }
 
   function sortAndTrim() {
-    // 依重生時間（越近=越早發生）排最上面
-    // respawnTs 小的在前；同時間用 calcTs 大的在前（較新的先）
+    // 依重生時間越近（越早到）排最上面
     history.sort((a, b) => {
       if (a.respawnTs !== b.respawnTs) return a.respawnTs - b.respawnTs;
       return b.calcTs - a.calcTs;
@@ -191,11 +207,76 @@
     history = history.slice(0, MAX_HISTORY);
   }
 
+  // ===== 通知相關 =====
+  function canUseNotification() {
+    return ("Notification" in window);
+  }
+
+  function updateNotifyUI() {
+    if (!canUseNotification()) {
+      notifyStatus.textContent = "通知：不支援";
+      notifyStatus.className = "pill bad";
+      notifyBtn.disabled = true;
+      return;
+    }
+
+    const p = Notification.permission; // 'default' | 'granted' | 'denied'
+    if (p === "granted") {
+      notifyStatus.textContent = "通知：已啟用";
+      notifyStatus.className = "pill ok";
+      notifyBtn.textContent = "通知已啟用";
+      notifyBtn.disabled = true;
+    } else if (p === "denied") {
+      notifyStatus.textContent = "通知：已封鎖（請到瀏覽器設定開啟）";
+      notifyStatus.className = "pill bad";
+      notifyBtn.textContent = "已封鎖";
+      notifyBtn.disabled = true;
+    } else {
+      notifyStatus.textContent = "通知：未啟用";
+      notifyStatus.className = "pill warn";
+      notifyBtn.textContent = "啟用通知";
+      notifyBtn.disabled = false;
+    }
+  }
+
+  async function requestNotifyPermission() {
+    if (!canUseNotification()) return false;
+    if (Notification.permission === "granted") return true;
+    if (Notification.permission === "denied") return false;
+
+    const res = await Notification.requestPermission();
+    updateNotifyUI();
+    return res === "granted";
+  }
+
+  function notifyRespawn(item) {
+    if (!canUseNotification()) return;
+    if (Notification.permission !== "granted") return;
+
+    const title = "🍄 蘑菇已重生";
+    const body = `${item.remark || "（無備註）"}｜人數 ${item.people}`;
+
+    // tag：同一筆只出一次
+    new Notification(title, {
+      body,
+      tag: `mushroom_${item.id}`,
+      // vibrate：Android 可能有效；iOS 會忽略（不算聲音）
+      vibrate: [200, 100, 200]
+    });
+  }
+
+  // ===== 狀態判斷 =====
+  function statusText(item) {
+    if (item.notified) return "已通知";
+    if (Date.now() >= item.respawnTs) return "已重生（待通知）";
+    return "倒數中";
+  }
+
   function renderHistory() {
     historyBody.innerHTML = "";
 
     if (history.length === 0) {
-      historyBody.innerHTML = `<tr><td colspan="5" class="muted">尚無紀錄</td></tr>`;
+      historyBody.innerHTML = `<tr><td colspan="6" class="muted">尚無紀錄</td></tr>`;
       return;
     }
 
@@ -206,6 +287,7 @@
         <td class="mono">${item.respawn}</td>
         <td>${item.people}</td>
         <td>${item.remark ? escapeHtml(item.remark) : "-"}</td>
+        <td>${statusText(item)}</td>
         <td><button class="danger tiny" data-id="${item.id}">刪除</button></td>
       `;
       historyBody.appendChild(tr);
@@ -221,6 +303,54 @@
     });
   }
 
+  function dedupeOnLoad() {
+    // 同備註合併：同 key 留最新 calcTs
+    const map = new Map(); // key -> item
+    history.forEach(item => {
+      const key = safeRemarkKey(item.remark);
+      if (key === "") {
+        map.set(item.id, item); // 空備註不合併
+        return;
+      }
+      const prev = map.get(key);
+      if (!prev || item.calcTs > prev.calcTs) map.set(key, item);
+    });
+    history = Array.from(map.values());
+  }
+
+  // 每 1 秒掃描：到點就通知一次
+  function startNotifierTicker() {
+    if (tickTimer) clearInterval(tickTimer);
+
+    tickTimer = setInterval(() => {
+      const now = Date.now();
+      let changed = false;
+
+      // 只在通知權限已允許時才嘗試通知（避免一直改狀態）
+      const canNotify = canUseNotification() && Notification.permission === "granted";
+
+      for (const item of history) {
+        if (!item.notified && now >= item.respawnTs) {
+          if (canNotify) {
+            notifyRespawn(item);
+            item.notified = true;
+            changed = true;
+          }
+          // 若尚未允許通知，狀態顯示「待通知」，不標記 notified
+        }
+      }
+
+      if (changed) {
+        saveHistory();
+        renderHistory();
+      } else {
+        // 沒有變動也刷新狀態文字（倒數中/待通知）讓 UI 比較準
+        renderHistory();
+      }
+    }, 1000);
+  }
+
+  // ===== 事件 =====
   document.getElementById("calcBtn").onclick = () => {
     const { h, m, s, people } = normalize();
     const now = new Date();
@@ -243,7 +373,7 @@
       history = history.filter(item => safeRemarkKey(item.remark) !== key);
     }
 
-    // 新紀錄
+    // 新紀錄（先不 notified）
     history.push({
       id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
       calc: format(now),
@@ -251,7 +381,8 @@
       calcTs: nowTs,
       respawnTs,
       people,
-      remark
+      remark,
+      notified: false
     });
 
     sortAndTrim();
@@ -274,48 +405,43 @@
     renderHistory();
   };
 
-  // 初始化
-  history = loadHistory().map(item => {
-    // 舊資料兼容：沒有 ts 就用字串解析
-    const calcTs = Number(item.calcTs) || Date.parse(item.calc) || Date.now();
-    const respawnTs = Number(item.respawnTs) || Date.parse(item.respawn) || Date.now();
+  notifyBtn.onclick = async () => {
+    await requestNotifyPermission();
+  };
 
-    return {
-      id: item.id || `${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      calc: item.calc || format(new Date(calcTs)),
-      respawn: item.respawn || format(new Date(respawnTs)),
-      calcTs,
-      respawnTs,
-      people: Number(item.people) || 5,
-      remark: item.remark || ""
-    };
-  });
+  // ===== 初始化 =====
+  function init() {
+    updateNow();
+    setInterval(updateNow, 1000);
 
-  // 初始化也做一次「同備註合併」+ 排序（同備註留最新 calcTs）
-  (function dedupeOnLoad() {
-    const map = new Map(); // key -> item
-    history.forEach(item => {
-      const key = safeRemarkKey(item.remark);
-      if (key === "") {
-        // 空備註不合併，讓它各自存在：用 unique key
-        map.set(item.id, item);
-        return;
-      }
-      const prev = map.get(key);
-      if (!prev || item.calcTs > prev.calcTs) {
-        map.set(key, item);
-      }
+    updateNotifyUI();
+
+    // 載入歷程（兼容舊資料）
+    history = loadHistory().map(item => {
+      const calcTs = Number(item.calcTs) || Date.parse(item.calc) || Date.now();
+      const respawnTs = Number(item.respawnTs) || Date.parse(item.respawn) || Date.now();
+
+      return {
+        id: item.id || `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        calc: item.calc || format(new Date(calcTs)),
+        respawn: item.respawn || format(new Date(respawnTs)),
+        calcTs,
+        respawnTs,
+        people: Number(item.people) || 5,
+        remark: item.remark || "",
+        notified: Boolean(item.notified) // 已通知狀態也持久化
+      };
     });
 
-    // map 可能含空備註用 id 當 key 的項目
-    history = Array.from(map.values());
+    dedupeOnLoad();
     sortAndTrim();
     saveHistory();
     renderHistory();
-  })();
 
-  updateNow();
-  setInterval(updateNow, 1000);
+    startNotifierTicker();
+  }
+
+  init();
 </script>
 
 </body>
