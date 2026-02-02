@@ -192,4 +192,131 @@
   }
 
   function renderHistory() {
-   
+    historyBody.innerHTML = "";
+
+    if (history.length === 0) {
+      historyBody.innerHTML = `<tr><td colspan="5" class="muted">尚無紀錄</td></tr>`;
+      return;
+    }
+
+    history.forEach(item => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="mono">${item.calc}</td>
+        <td class="mono">${item.respawn}</td>
+        <td>${item.people}</td>
+        <td>${item.remark ? escapeHtml(item.remark) : "-"}</td>
+        <td><button class="danger tiny" data-id="${item.id}">刪除</button></td>
+      `;
+      historyBody.appendChild(tr);
+    });
+
+    historyBody.querySelectorAll("button[data-id]").forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.id;
+        history = history.filter(x => x.id !== id);
+        saveHistory();
+        renderHistory();
+      };
+    });
+  }
+
+  document.getElementById("calcBtn").onclick = () => {
+    const { h, m, s, people } = normalize();
+    const now = new Date();
+    const nowTs = now.getTime();
+
+    const respawnTs = nowTs
+      + (h * 3600 + m * 60 + s) * 1000
+      + FIXED_BONUS_MINUTES * 60 * 1000;
+
+    const target = new Date(respawnTs);
+
+    const remark = remarkEl.value.trim();
+    const key = safeRemarkKey(remark);
+
+    respawnText.textContent = format(target);
+    resultBox.style.display = "block";
+
+    // 同備註合併：若 key 非空，先刪掉舊的同 key 記錄
+    if (key !== "") {
+      history = history.filter(item => safeRemarkKey(item.remark) !== key);
+    }
+
+    // 新紀錄
+    history.push({
+      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      calc: format(now),
+      respawn: format(target),
+      calcTs: nowTs,
+      respawnTs,
+      people,
+      remark
+    });
+
+    sortAndTrim();
+    saveHistory();
+    renderHistory();
+  };
+
+  document.getElementById("resetBtn").onclick = () => {
+    hEl.value = 0;
+    mEl.value = 0;
+    sEl.value = 0;
+    peopleEl.value = 5;
+    remarkEl.value = "";
+    resultBox.style.display = "none";
+  };
+
+  clearHistoryBtn.onclick = () => {
+    history = [];
+    saveHistory();
+    renderHistory();
+  };
+
+  // 初始化
+  history = loadHistory().map(item => {
+    // 舊資料兼容：沒有 ts 就用字串解析
+    const calcTs = Number(item.calcTs) || Date.parse(item.calc) || Date.now();
+    const respawnTs = Number(item.respawnTs) || Date.parse(item.respawn) || Date.now();
+
+    return {
+      id: item.id || `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      calc: item.calc || format(new Date(calcTs)),
+      respawn: item.respawn || format(new Date(respawnTs)),
+      calcTs,
+      respawnTs,
+      people: Number(item.people) || 5,
+      remark: item.remark || ""
+    };
+  });
+
+  // 初始化也做一次「同備註合併」+ 排序（同備註留最新 calcTs）
+  (function dedupeOnLoad() {
+    const map = new Map(); // key -> item
+    history.forEach(item => {
+      const key = safeRemarkKey(item.remark);
+      if (key === "") {
+        // 空備註不合併，讓它各自存在：用 unique key
+        map.set(item.id, item);
+        return;
+      }
+      const prev = map.get(key);
+      if (!prev || item.calcTs > prev.calcTs) {
+        map.set(key, item);
+      }
+    });
+
+    // map 可能含空備註用 id 當 key 的項目
+    history = Array.from(map.values());
+    sortAndTrim();
+    saveHistory();
+    renderHistory();
+  })();
+
+  updateNow();
+  setInterval(updateNow, 1000);
+</script>
+
+</body>
+</html>
