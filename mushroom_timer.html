@@ -99,7 +99,7 @@
 
   <div class="actions">
     <button class="danger" id="clearHistoryBtn">清空歷程</button>
-    <span class="muted">（重整會自動刪除過期；同備註合併；依重生時間越近越上；最多 10 筆；保存在 localStorage）</span>
+    <span class="muted">（重整會自動刪除過期；同備註合併；依重生時間越近越上；最多 20 筆；保存在 localStorage）</span>
   </div>
 </div>
 
@@ -121,7 +121,7 @@
 
 <script>
   const FIXED_BONUS_MINUTES = 4;
-  const MAX_HISTORY = 10;
+  const MAX_HISTORY = 20;
   const STORAGE_KEY = "mushroom_respawn_history_notify_v2";
 
   const nowText = document.getElementById("nowText");
